@@ -1,4 +1,4 @@
-import csv
+import csv, os
 import ij.IJ
 import ij.gui
 from ij import IJ, ImagePlus
@@ -25,22 +25,31 @@ class GridReader:
         return self.reader.next()
 
     def getImage(self):
-        self.sourceImage = IJ.getImage()
+        head, tail = os.path.split( self.fp )
+        fn, ext = os.path.splitext( tail )
+        fnSplit = fn.split("_")
+        if len(fnSplit) != 2:
+            raise ValueError("File name is not formatted properly")
+        imgPath = os.path.join(head, fnSplit[0] + ".tif")
+        img = IJ.openImage(imgPath)
+        if img is None:
+            raise ValueError("Couldn't find the image")
+        self.sourceImage = img
 
-grid = GridReader("/Users/cm/Desktop/foo")
+        
+grid = GridReader("/Users/cm/Desktop/CCM_scorer/plate-001_plate1")
 
 x,y = grid.next()
+x,y = grid.next()
+
 roi = Roi(int(x), int(y), int(grid.width), int(grid.width))
 grid.sourceImage.setRoi(roi)
-
-# gd = ij.gui.GenericDialog('Command Launcher')
-# gd.addStringField('Command: ', '');
-# prompt = gd.getStringFields().get(0)
-
 grid.sourceImage2 = grid.sourceImage.getProcessor().crop()
 grid.sourceImage.killRoi()
-
 grid.sourceImage3 = ImagePlus("test", grid.sourceImage2)
+IJ.run(grid.sourceImage3, "Enhance Contrast", "saturated=0.35")
 grid.sourceImage3.show()
 
 #.close()
+
+
