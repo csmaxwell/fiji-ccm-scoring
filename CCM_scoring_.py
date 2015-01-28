@@ -19,37 +19,40 @@ class GridReader:
         except ValueError:
             raise ValueError("There are the wrong number of fields on the first line")
         # 
-        self.getImage()
+        self.loadSourceImage()
+        self.openImage = ImagePlus()
     
-    def next(self):
-        return self.reader.next()
-
-    def getImage(self):
+    def openNext( self ):
+        self.openImage.close()
+        # Reads in the next grid coordinates
+        x,y = self.reader.next()
+        # Set the ROI on the source image
+        roi = Roi(int(x), int(y), int(self.width), int(self.width))
+        self.sourceImage.setRoi(roi)
+        # Get a processor corresponding to a cropped version of the image
+        processor = self.sourceImage.getProcessor().crop()
+        self.sourceImage.killRoi()
+        # Make a new image of image and run contrast on it
+        self.openImage = ImagePlus("test", processor)
+        IJ.run(self.openImage, "Enhance Contrast", "saturated=0.35")
+        self.openImage.show()
+    
+    def loadSourceImage( self ):
         head, tail = os.path.split( self.fp )
         fn, ext = os.path.splitext( tail )
         fnSplit = fn.split("_")
         if len(fnSplit) != 2:
             raise ValueError("File name is not formatted properly")
         imgPath = os.path.join(head, fnSplit[0] + ".tif")
-        img = IJ.openImage(imgPath)
+        img = ImagePlus(imgPath)
         if img is None:
             raise ValueError("Couldn't find the image")
         self.sourceImage = img
 
+
         
 grid = GridReader("/Users/cm/Desktop/CCM_scorer/plate-001_plate1")
-
-x,y = grid.next()
-x,y = grid.next()
-
-roi = Roi(int(x), int(y), int(grid.width), int(grid.width))
-grid.sourceImage.setRoi(roi)
-grid.sourceImage2 = grid.sourceImage.getProcessor().crop()
-grid.sourceImage.killRoi()
-grid.sourceImage3 = ImagePlus("test", grid.sourceImage2)
-IJ.run(grid.sourceImage3, "Enhance Contrast", "saturated=0.35")
-grid.sourceImage3.show()
-
-#.close()
+grid.openNext()
+grid.openNext()
 
 
