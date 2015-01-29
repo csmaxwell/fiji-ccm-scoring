@@ -110,7 +110,7 @@ class GridReader:
     def openNext(self, auto=False, thumbNails = True):
         """ Increments the current n """
         # Stop if you're done with the plate
-        if self.n + 1 > self.rows*self.columns:
+        if self.n + 2 > int(self.rows) * int(self.columns):
             gd = GenericDialog("")
             gd.addMessage("No more images")
             gd.showDialog()
