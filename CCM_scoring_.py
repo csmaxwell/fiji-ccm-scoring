@@ -106,6 +106,11 @@ class GridReader:
     def openNext(self, auto=False):
         """ Increments the current n """
         # Set the current number being examined
+        if self.n +1 > self.rows*self.columns:
+            gd = GenericDialog("")
+            gd.addMessage("No more images")
+            gd.showDialog()
+            return None
         self.n = self.n + 1
         self.row, self.col, self.x, self.y = self.gridCoords[ self.n ]
         self.open(auto=auto)
@@ -194,8 +199,9 @@ class NextImage(ActionListener):
         global plateGrid
         global frame
         score = plateGrid.openNext()
-        self.scoreField.setText(score)
-        frame.setVisible(True)
+        if score is not None:
+            self.scoreField.setText(score)
+            frame.setVisible(True)
 
 class PreviousImage(ActionListener):
     def __init__(self, field):
@@ -226,7 +232,7 @@ class Closing(WindowAdapter):
 
 ###### 
     
-plateGrid = GridReader(fp = "/Users/cm/Desktop/CCM_scorer/plate-001_plate1")
+plateGrid = GridReader()
 
 minField = JFormattedTextField( plateGrid.getMin() )
 minField.addActionListener( ChangedMin(minField) )
