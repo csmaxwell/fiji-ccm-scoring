@@ -21,7 +21,8 @@ class GridReader:
         # Get the directory, the name of the grid, and the name of the image
         self.initializeFilenames()
         # Read the first line of the file
-        self.reader = csv.reader( open(self.fp,"r"), delimiter="\t" )
+        self.inGrid = open(self.fp,"r")
+        self.reader = csv.reader(self.inGrid , delimiter="\t" )
         firstLine = self.reader.next()
         try:
             self.rows, self.columns, self.width = tuple(firstLine)
@@ -32,10 +33,11 @@ class GridReader:
             raise ValueError("There are the wrong number of fields on the first line")
         self.loadSourceImage()
         self.openImage = ImagePlus()
+        self.initializeWriter()
         self.initializeGridCoords()
         if shuffle:
             shuffle(self.gridCoords)
-        self.n = 0
+        self.n = -1
         self.openNext(auto=True)
     
     def initializeFilenames(self):
@@ -53,6 +55,20 @@ class GridReader:
         # Save the imageID for later
         self.imageID, tmp = fnSplit
 
+    def initializeWriter(self):
+        self.out = open( os.path.join(self.directory, self.plateID + "_scores.csv"), "w" )
+        self.writer = csv.writer(self.out, delimiter=",")
+        self.writer.writerow(["row", "col", "x", "y", "min", "max", "score"])
+
+    def writeScore(self, score):
+        self.writer.writerow( [self.row, self.col, self.x,
+                               self.y, self.min, self.max, score])
+    
+    def close(self):
+        self.sourceImage.close()
+        self.openImage.close()
+        self.out.close()
+        
     def initializeGridCoords(self):
         self.gridCoords = []
         row = 1
@@ -63,6 +79,7 @@ class GridReader:
                 row = row + 1
             self.gridCoords.append( (row, col, x, y) )
             col = col + 1
+        self.inGrid.close()
         # This was here for testing
         # f =  open( os.path.join(self.directory, self.plateID + ".csv"), "w")
         # writer = csv.writer(f, delimiter=",")
@@ -76,13 +93,21 @@ class GridReader:
         if img is None:
             raise ValueError("Couldn't find the image")
         self.sourceImage = img
+
+    def openNext(self, auto=False):
+        self.n = self.n + 1
+        self.row, self.col, self.x, self.y = self.gridCoords[ self.n ]
+        self.open(auto=auto)
+
+    def openPrevious(self, auto=False):
+        self.n = self.n - 1
+        self.row, self.col, self.x, self.y = self.gridCoords[ self.n ]
+        self.open(auto=auto)
     
-    def openNext( self, auto=False ):
-        self.openImage.close()
-        #
-        row, col, x, y = self.gridCoords[ self.n ]
+    def open( self, auto=False ):
+        self.openImage.close()        
         # Set the ROI on the source image
-        roi = Roi(int(x), int(y), int(self.width), int(self.width))
+        roi = Roi(int(self.x), int(self.y), int(self.width), int(self.width))
         self.sourceImage.setRoi(roi)
         # Get a processor corresponding to a cropped version of the image
         processor = self.sourceImage.getProcessor().crop()
@@ -91,7 +116,6 @@ class GridReader:
         self.openImage = ImagePlus(" ", processor)
         self.setContrast(auto)
         self.openImage.show()
-        self.n = self.n + 1
         return self.openImage
     
     def setMinAndMax(self, minVal, maxVal):
@@ -136,7 +160,7 @@ class ChangedMin(ActionListener):
         self.field = field
     def actionPerformed(self, event):
         global plateGrid
-        newValue = self.field.getValue()
+        newValue = self.field.getText()
         currentMax = plateGrid.getMax()
         plateGrid.setMinAndMax(newValue, currentMax)
 
@@ -145,7 +169,7 @@ class ChangedMax(ActionListener):
         self.field = field
     def actionPerformed(self, event):
         global plateGrid
-        newValue = self.field.getValue()
+        newValue = self.field.getText()
         currentMin = plateGrid.getMin()
         plateGrid.setMinAndMax(currentMin, newValue)
 
@@ -157,28 +181,35 @@ class NextImage(ActionListener):
       plateGrid.openNext()
       frame.setVisible(True)
 
+class WriteScore(ActionListener):
+    def __init__(self, field):
+        self.field = field
+    def actionPerformed(self, event):
+        global plateGrid
+        global frame
+        plateGrid.writeScore( self.field.getText() )
+
 class Closing(WindowAdapter):
     def windowClosing(self,e):
         #WindowManager.closeAllWindows()
         global plateGrid
-        plateGrid.sourceImage.close()
-        plateGrid.openImage.close()
+        plateGrid.close()
         pass
 
-class NextImageListener(KeyAdapter):
-    def keyPressed(self, keyEvent):
-        global plateGrid
-        global frame
-        IJ.log("clicked keyCode " + str(keyEvent.getKeyCode()))
-        keyPressed = keyEvent.getKeyCode()
-        if keyPressed == 78: # This is the 'n' key
-            plateGrid.openNext()
-            frame.setVisible(True)
-        if keyPressed == 10: # This is the 'enter' key
-            plateGrid.openNext()
-            frame.setVisible(True)
-        # Prevent further propagation of the key event:
-        keyEvent.consume()
+# class NextImageListener(KeyAdapter):
+#     def keyPressed(self, keyEvent):
+#         global plateGrid
+#         global frame
+#         IJ.log("clicked keyCode " + str(keyEvent.getKeyCode()))
+#         keyPressed = keyEvent.getKeyCode()
+#         if keyPressed == 78: # This is the 'n' key
+#             plateGrid.openNext()
+#             frame.setVisible(True)
+#         if keyPressed == 10: # This is the 'enter' key
+#             plateGrid.openNext()
+#             frame.setVisible(True)
+#         # Prevent further propagation of the key event:
+#         keyEvent.consume()
 
 plateGrid = GridReader(fp = "/Users/cm/Desktop/CCM_scorer/plate-001_plate1")
 
@@ -189,31 +220,33 @@ all.setLayout(layout)
 all.add( JLabel("  ") )
 button = JButton("Next image")
 button.addActionListener( NextImage() )
-button.addKeyListener(NextImageListener())
+#button.addKeyListener(NextImageListener())
 all.add( button )
 
 all.add( JLabel("Min") )
-textField1 = JFormattedTextField(68)
+textField1 = JFormattedTextField( plateGrid.getMin() )
 textField1.addActionListener( ChangedMin(textField1) )
 #textField1.addKeyListener(listener)
 all.add(textField1)
 
 all.add( JLabel("Max") )
-textField2 = JFormattedTextField(130)
+textField2 = JFormattedTextField( plateGrid.getMax() )
 textField2.addActionListener( ChangedMax(textField2) )
 #textField2.addKeyListener(listener)
 all.add(textField2)
 
 all.add( JLabel("Score :") )
-textField3 = JFormattedTextField( float(0.0) )
-textField3.addActionListener( NextImage() )
+scoreField = JTextField( "" )
+scoreField.addActionListener( WriteScore(scoreField) )
+scoreField.addActionListener( NextImage() )
 #textField3.addKeyListener( NextImageListener() )
-all.add(textField3)
+all.add(scoreField)
 
 frame = JFrame("CCM scoring")
 frame.getContentPane().add(JScrollPane(all))
 frame.pack()
 frame.addWindowListener( Closing() )
+scoreField.requestFocusInWindow()
 frame.setVisible(True)
 
 
