@@ -1,6 +1,8 @@
 import csv, os
 import ij.IJ
 import ij.gui
+import ij.io
+from ij.io import FileSaver
 from ij import IJ, ImagePlus, WindowManager
 from ij.gui import Roi, Overlay, GenericDialog
 from java.awt.event import KeyEvent, KeyAdapter, ActionListener, WindowAdapter
@@ -37,6 +39,7 @@ class GridReader:
         self.n = -1
         self.maxN = -1
         self.scores = {}
+        self.thumbDir = os.path.join(self.directory, self.plateID + "_thumbs")
         self.openNext(auto=True)
     
     def initializeFilenames(self):
@@ -73,13 +76,14 @@ class GridReader:
         # iterate through all the scores and write them to the disk
         for i in range(0, self.maxN+1):
             writer.writerow( self.scores[ i ] )
-        self.out.close()
+        self.out.close()        
     
     def close(self):
         """ This method is called by the Closing listener below
         when the GUI frame is closed """
         self.sourceImage.close()
         self.openImage.close()
+        self.writeReport()
         
     def initializeGridCoords(self):
         """ Initializes a list of coordinates that are used by
@@ -103,17 +107,22 @@ class GridReader:
             raise ValueError("Couldn't find the image")
         self.sourceImage = img
 
-    def openNext(self, auto=False):
+    def openNext(self, auto=False, thumbNails = True):
         """ Increments the current n """
-        # Set the current number being examined
-        if self.n +1 > self.rows*self.columns:
+        # Stop if you're done with the plate
+        if self.n + 1 > self.rows*self.columns:
             gd = GenericDialog("")
             gd.addMessage("No more images")
             gd.showDialog()
             return None
+        # Set the current number being examined
         self.n = self.n + 1
         self.row, self.col, self.x, self.y = self.gridCoords[ self.n ]
-        self.open(auto=auto)
+        # open the file
+        self.openSubImage(auto=auto)
+        # Write the thumbnail
+        if thumbNails:
+            self.writeThumbnail()
         # Try to return the information about the current score
         # if it doesn't exist, return an empty string
         try:
@@ -127,10 +136,10 @@ class GridReader:
             self.n = 0
         else:
             self.row, self.col, self.x, self.y = self.gridCoords[ self.n ]
-            self.open(auto=auto)
+            self.openSubImage(auto=auto)
         return self.scores[ self.n ][6]
     
-    def open( self, auto=False ):
+    def openSubImage( self, auto=False ):
         self.openImage.close()        
         # Set the ROI on the source image
         roi = Roi(int(self.x), int(self.y), int(self.width), int(self.width))
@@ -143,11 +152,41 @@ class GridReader:
         self.setContrast(auto)
         self.openImage.show()
         return self.openImage
+
+    def writeThumbnail(self):
+        try:
+            os.mkdir(self.thumbDir)
+        except OSError:
+            pass
+        fs = FileSaver(self.openImage)
+        imName = "_".join([ str(self.plateID), str(self.row), str(self.col) ] ) + ".jpg"
+        fs.saveAsJpeg( os.path.join(self.thumbDir, imName) )
+
+    def writeReport(self):
+        def img(location, width, height):
+            return '<img src="%s" width="%i" height="%i">' % (location, width, height)
+        # Initialize the connection for the writer
+        reportOut = open( os.path.join(self.thumbDir, self.plateID + ".html"), "w")
+        # Initialize the HTML writer
+        t = Table()
+        t.rows.append(TableRow(["row", "col", "score", "image"], header=True))
+        # For each score, sort by the colony morphology score
+        scores = [i for i in self.scores.values()]
+        for i in sorted( scores, key=lambda info: info[6]):
+            row, col, x, y, theMin, theMax, score = i
+            # Images live the same directory as the HTML report
+            imName = "_".join([ str(self.plateID), str(row), str(col) ] ) + ".jpg"
+            # Append the scores along with an image tag to the image
+            t.rows.append(TableRow([ str(row), str(col), str(score), img(imName, 300, 300) ] ))
+        # write the table and close the connection
+        reportOut.write( str(t) )
+        reportOut.close()
     
     def setMinAndMax(self, minVal, maxVal):
         self.min, self.max = minVal, maxVal
         self.openImage.getProcessor().setMinAndMax(self.min, self.max)
         self.openImage.updateAndDraw()
+        self.writeThumbnail()
 
     def getMin(self):
         return self.min
@@ -188,7 +227,6 @@ class ChangedMax(ActionListener):
     def actionPerformed(self, event):
         global plateGrid
         newValue = int(self.field.getText())
-        print newValue
         currentMin = plateGrid.getMin()
         plateGrid.setMinAndMax(currentMin, newValue)
 
@@ -210,7 +248,6 @@ class PreviousImage(ActionListener):
         global plateGrid
         global frame
         score = plateGrid.openPrevious()
-        print score
         self.scoreField.setText(score)
         frame.setVisible(True)
 
@@ -224,16 +261,340 @@ class WriteScore(ActionListener):
 
 class Closing(WindowAdapter):
     def windowClosing(self,e):
-        #WindowManager.closeAllWindows()
         global plateGrid
         plateGrid.close()
         pass
 
 
-###### 
-    
+##### End GUI classes
+
+
+##### begin HTML.py
+# This is included to allow for easy creation of an HTML report of the thumbnails
+#
+
+#--- LICENSE ------------------------------------------------------------------
+
+# Copyright Philippe Lagadec - see http://www.decalage.info/contact for contact info
+#
+# This module provides a few classes to easily generate HTML tables and lists.
+#
+# This software is governed by the CeCILL license under French law and
+# abiding by the rules of distribution of free software.  You can  use,
+# modify and/or redistribute the software under the terms of the CeCILL
+# license as circulated by CEA, CNRS and INRIA at the following URL
+# "http://www.cecill.info".
+#
+# A copy of the CeCILL license is also provided in these attached files:
+# Licence_CeCILL_V2-en.html and Licence_CeCILL_V2-fr.html
+#
+# As a counterpart to the access to the source code and  rights to copy,
+# modify and redistribute granted by the license, users are provided only
+# with a limited warranty  and the software's author, the holder of the
+# economic rights, and the successive licensors have only limited
+# liability.
+#
+# In this respect, the user's attention is drawn to the risks associated
+# with loading,  using,  modifying and/or developing or reproducing the
+# software by the user in light of its specific status of free software,
+# that may mean  that it is complicated to manipulate,  and  that  also
+# therefore means  that it is reserved for developers  and  experienced
+# professionals having in-depth computer knowledge. Users are therefore
+# encouraged to load and test the software's suitability as regards their
+# requirements in conditions enabling the security of their systems and/or
+# data to be ensured and,  more generally, to use and operate it in the
+# same conditions as regards security.
+#
+# The fact that you are presently reading this means that you have had
+# knowledge of the CeCILL license and that you accept its terms.
+
+#--- CONSTANTS -----------------------------------------------------------------
+
+# Table style to get thin black lines in Mozilla/Firefox instead of 3D borders
+TABLE_STYLE_THINBORDER = "border: 1px solid #000000; border-collapse: collapse;"
+#TABLE_STYLE_THINBORDER = "border: 1px solid #000000;"
+
+
+#=== CLASSES ===================================================================
+
+class TableCell (object):
+    """
+    a TableCell object is used to create a cell in a HTML table. (TD or TH)
+
+    Attributes:
+    - text: text in the cell (may contain HTML tags). May be any object which
+            can be converted to a string using str().
+    - header: bool, false for a normal data cell (TD), true for a header cell (TH)
+    - bgcolor: str, background color
+    - width: str, width
+    - align: str, horizontal alignement (left, center, right, justify or char)
+    - char: str, alignment character, decimal point if not specified
+    - charoff: str, see HTML specs
+    - valign: str, vertical alignment (top|middle|bottom|baseline)
+    - style: str, CSS style
+    - attribs: dict, additional attributes for the TD/TH tag
+
+    Reference: http://www.w3.org/TR/html4/struct/tables.html#h-11.2.6
+    """
+
+    def __init__(self, text="", bgcolor=None, header=False, width=None,
+                align=None, char=None, charoff=None, valign=None, style=None,
+                attribs=None):
+        """TableCell constructor"""
+        self.text    = text
+        self.bgcolor = bgcolor
+        self.header  = header
+        self.width   = width
+        self.align   = align
+        self.char    = char
+        self.charoff = charoff
+        self.valign  = valign
+        self.style   = style
+        self.attribs = attribs
+        if attribs==None:
+            self.attribs = {}
+
+    def __str__(self):
+        """return the HTML code for the table cell as a string"""
+        attribs_str = ""
+        if self.bgcolor: self.attribs['bgcolor'] = self.bgcolor
+        if self.width:   self.attribs['width']   = self.width
+        if self.align:   self.attribs['align']   = self.align
+        if self.char:    self.attribs['char']    = self.char
+        if self.charoff: self.attribs['charoff'] = self.charoff
+        if self.valign:  self.attribs['valign']  = self.valign
+        if self.style:   self.attribs['style']   = self.style
+        for attr in self.attribs:
+            attribs_str += ' %s="%s"' % (attr, self.attribs[attr])
+        if self.text:
+            text = str(self.text)
+        else:
+            # An empty cell should at least contain a non-breaking space
+            text = '&nbsp;'
+        if self.header:
+            return '  <TH%s>%s</TH>\n' % (attribs_str, text)
+        else:
+            return '  <TD%s>%s</TD>\n' % (attribs_str, text)
+
+#-------------------------------------------------------------------------------
+
+class TableRow (object):
+    """
+    a TableRow object is used to create a row in a HTML table. (TR tag)
+
+    Attributes:
+    - cells: list, tuple or any iterable, containing one string or TableCell
+             object for each cell
+    - header: bool, true for a header row (TH), false for a normal data row (TD)
+    - bgcolor: str, background color
+    - col_align, col_valign, col_char, col_charoff, col_styles: see Table class
+    - attribs: dict, additional attributes for the TR tag
+
+    Reference: http://www.w3.org/TR/html4/struct/tables.html#h-11.2.5
+    """
+
+    def __init__(self, cells=None, bgcolor=None, header=False, attribs=None,
+                col_align=None, col_valign=None, col_char=None,
+                col_charoff=None, col_styles=None):
+        """TableCell constructor"""
+        self.bgcolor     = bgcolor
+        self.cells       = cells
+        self.header      = header
+        self.col_align   = col_align
+        self.col_valign  = col_valign
+        self.col_char    = col_char
+        self.col_charoff = col_charoff
+        self.col_styles  = col_styles
+        self.attribs     = attribs
+        if attribs==None:
+            self.attribs = {}
+
+    def __str__(self):
+        """return the HTML code for the table row as a string"""
+        attribs_str = ""
+        if self.bgcolor: self.attribs['bgcolor'] = self.bgcolor
+        for attr in self.attribs:
+            attribs_str += ' %s="%s"' % (attr, self.attribs[attr])
+        result = ' <TR%s>\n' % attribs_str
+        for cell in self.cells:
+            col = self.cells.index(cell)    # cell column index
+            if not isinstance(cell, TableCell):
+                cell = TableCell(cell, header=self.header)
+            # apply column alignment if specified:
+            if self.col_align and cell.align==None:
+                cell.align = self.col_align[col]
+            if self.col_char and cell.char==None:
+                cell.char = self.col_char[col]
+            if self.col_charoff and cell.charoff==None:
+                cell.charoff = self.col_charoff[col]
+            if self.col_valign and cell.valign==None:
+                cell.valign = self.col_valign[col]
+            # apply column style if specified:
+            if self.col_styles and cell.style==None:
+                cell.style = self.col_styles[col]
+            result += str(cell)
+        result += ' </TR>\n'
+        return result
+
+#-------------------------------------------------------------------------------
+
+class Table (object):
+    """
+    a Table object is used to create a HTML table. (TABLE tag)
+
+    Attributes:
+    - rows: list, tuple or any iterable, containing one iterable or TableRow
+            object for each row
+    - header_row: list, tuple or any iterable, containing the header row (optional)
+    - border: str or int, border width
+    - style: str, table style in CSS syntax (thin black borders by default)
+    - width: str, width of the table on the page
+    - attribs: dict, additional attributes for the TABLE tag
+    - col_width: list or tuple defining width for each column
+    - col_align: list or tuple defining horizontal alignment for each column
+    - col_char: list or tuple defining alignment character for each column
+    - col_charoff: list or tuple defining charoff attribute for each column
+    - col_valign: list or tuple defining vertical alignment for each column
+    - col_styles: list or tuple of HTML styles for each column
+
+    Reference: http://www.w3.org/TR/html4/struct/tables.html#h-11.2.1
+    """
+
+    def __init__(self, rows=None, border='1', style=None, width=None,
+                cellspacing=None, cellpadding=4, attribs=None, header_row=None,
+                col_width=None, col_align=None, col_valign=None,
+                col_char=None, col_charoff=None, col_styles=None):
+        """TableCell constructor"""
+        self.border = border
+        self.style = style
+        # style for thin borders by default
+        if style == None: self.style = TABLE_STYLE_THINBORDER
+        self.width       = width
+        self.cellspacing = cellspacing
+        self.cellpadding = cellpadding
+        self.header_row  = header_row
+        self.rows        = rows
+        if not rows: self.rows = []
+        self.attribs     = attribs
+        if not attribs: self.attribs = {}
+        self.col_width   = col_width
+        self.col_align   = col_align
+        self.col_char    = col_char
+        self.col_charoff = col_charoff
+        self.col_valign  = col_valign
+        self.col_styles  = col_styles
+
+    def __str__(self):
+        """return the HTML code for the table as a string"""
+        attribs_str = ""
+        if self.border: self.attribs['border'] = self.border
+        if self.style:  self.attribs['style'] = self.style
+        if self.width:  self.attribs['width'] = self.width
+        if self.cellspacing:  self.attribs['cellspacing'] = self.cellspacing
+        if self.cellpadding:  self.attribs['cellpadding'] = self.cellpadding
+        for attr in self.attribs:
+            attribs_str += ' %s="%s"' % (attr, self.attribs[attr])
+        result = '<TABLE%s>\n' % attribs_str
+        # insert column tags and attributes if specified:
+        if self.col_width:
+            for width in self.col_width:
+                result += '  <COL width="%s">\n' % width
+        if self.header_row:
+            if not isinstance(self.header_row, TableRow):
+                result += str(TableRow(self.header_row, header=True))
+            else:
+                result += str(self.header_row)
+        # Then all data rows:
+        for row in self.rows:
+            if not isinstance(row, TableRow):
+                row = TableRow(row)
+            # apply column alignments  and styles to each row if specified:
+            # (Mozilla bug workaround)
+            if self.col_align and not row.col_align:
+                row.col_align = self.col_align
+            if self.col_char and not row.col_char:
+                row.col_char = self.col_char
+            if self.col_charoff and not row.col_charoff:
+                row.col_charoff = self.col_charoff
+            if self.col_valign and not row.col_valign:
+                row.col_valign = self.col_valign
+            if self.col_styles and not row.col_styles:
+                row.col_styles = self.col_styles
+            result += str(row)
+        result += '</TABLE>'
+        return result
+
+
+#-------------------------------------------------------------------------------
+
+class List (object):
+    """
+    a List object is used to create an ordered or unordered list in HTML.
+    (UL/OL tag)
+
+    Attributes:
+    - lines: list, tuple or any iterable, containing one string for each line
+    - ordered: bool, choice between an ordered (OL) or unordered list (UL)
+    - attribs: dict, additional attributes for the OL/UL tag
+
+    Reference: http://www.w3.org/TR/html4/struct/lists.html
+    """
+
+    def __init__(self, lines=None, ordered=False, start=None, attribs=None):
+        """List constructor"""
+        if lines:
+            self.lines = lines
+        else:
+            self.lines = []
+        self.ordered = ordered
+        self.start = start
+        if attribs:
+            self.attribs = attribs
+        else:
+            self.attribs = {}
+
+    def __str__(self):
+        """return the HTML code for the list as a string"""
+        attribs_str = ""
+        if self.start:  self.attribs['start'] = self.start
+        for attr in self.attribs:
+            attribs_str += ' %s="%s"' % (attr, self.attribs[attr])
+        if self.ordered: tag = 'OL'
+        else:            tag = 'UL'
+        result = '<%s%s>\n' % (tag, attribs_str)
+        for line in self.lines:
+            result += ' <LI>%s\n' % str(line)
+        result += '</%s>\n' % tag
+        return result
+
+
+#=== FUNCTIONS ================================================================
+
+# much simpler definition of a link as a function:
+def Link(text, url):
+    return '<a href="%s">%s</a>' % (url, text)
+
+def link(text, url):
+    return '<a href="%s">%s</a>' % (url, text)
+
+def table(*args, **kwargs):
+    'return HTML code for a table as a string. See Table class for parameters.'
+    return str(Table(*args, **kwargs))
+
+def list(*args, **kwargs):
+    'return HTML code for a list as a string. See List class for parameters.'
+    return str(List(*args, **kwargs))
+
+######### End HTML.py
+
+
+###### Main Code ############
+
+# Initialize the grid reader
 plateGrid = GridReader()
 
+
+# Set up the fields for the SWING interface
 minField = JFormattedTextField( plateGrid.getMin() )
 minField.addActionListener( ChangedMin(minField) )
 
