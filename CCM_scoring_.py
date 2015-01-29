@@ -9,8 +9,6 @@ from java.awt import Color, GridLayout
 from random import shuffle
 
 
-# Keycode 78 is "n"
-
 class GridReader:    
     def __init__(self, fp = None, shuffleGrid=True):
         # Initialize the filepath to the grid file
@@ -33,11 +31,12 @@ class GridReader:
             raise ValueError("There are the wrong number of fields on the first line")
         self.loadSourceImage()
         self.openImage = ImagePlus()
-        self.initializeWriter()
         self.initializeGridCoords()
         if shuffle:
             shuffle(self.gridCoords)
         self.n = -1
+        self.maxN = -1
+        self.scores = {}
         self.openNext(auto=True)
     
     def initializeFilenames(self):
@@ -55,25 +54,36 @@ class GridReader:
         # Save the imageID for later
         self.imageID, tmp = fnSplit
 
-    def initializeWriter(self):
-        self.out = open( os.path.join(self.directory, self.plateID + "_scores.csv"), "w" )
-        self.writer = csv.writer(self.out, delimiter=",")
-        self.writer.writerow(["row", "col", "x", "y", "min", "max", "score"])
-        self.out.close()
-
     def writeScore(self, score):
-        self.out = open( os.path.join(self.directory, self.plateID + "_scores.csv"), "a" )
-        self.writer = csv.writer(self.out, delimiter=",")
-        self.writer.writerow( [self.row, self.col, self.x,
-                               self.y, self.min, self.max, score])
+        """ This will write the score of the current image to disk.
+        Note that the scores file is re-written each time to avoid
+        losing data in case of a crash."""
+        # When you move back, you start examining old files
+        # This keeps track of how far you've gone.
+        header = ["row", "col", "x", "y", "min", "max", "score"]
+        if self.n > self.maxN:
+            self.maxN = self.n
+        # Save the info for the score in a dictionary
+        info = [self.row, self.col, self.x, self.y, self.min, self.max, score]
+        self.scores[ self.n ] = info
+        # initialize a writer for the scores and write a header
+        self.out = open( os.path.join(self.directory, self.plateID + "_scores.csv"), "w" )
+        writer = csv.writer(self.out, delimiter=",")
+        writer.writerow(header)
+        # iterate through all the scores and write them to the disk
+        for i in range(0, self.maxN+1):
+            writer.writerow( self.scores[ i ] )
         self.out.close()
     
     def close(self):
+        """ This method is called by the Closing listener below
+        when the GUI frame is closed """
         self.sourceImage.close()
         self.openImage.close()
-        self.out.close()
         
     def initializeGridCoords(self):
+        """ Initializes a list of coordinates that are used by
+        the open method. self.n indexes these coordinates """
         self.gridCoords = []
         row = 1
         col = 1
@@ -84,14 +94,9 @@ class GridReader:
             self.gridCoords.append( (row, col, x, y) )
             col = col + 1
         self.inGrid.close()
-        # This was here for testing
-        # f =  open( os.path.join(self.directory, self.plateID + ".csv"), "w")
-        # writer = csv.writer(f, delimiter=",")
-        # for tmp in self.gridCoords:
-        #     writer.writerow(tmp)
-        # f.close()        
         
     def loadSourceImage( self ):
+        """ Loads the image that the grid was set up on """
         imgPath = os.path.join(self.directory, self.imageID + ".tif")
         img = ImagePlus(imgPath)
         if img is None:
@@ -99,14 +104,26 @@ class GridReader:
         self.sourceImage = img
 
     def openNext(self, auto=False):
+        """ Increments the current n """
+        # Set the current number being examined
         self.n = self.n + 1
         self.row, self.col, self.x, self.y = self.gridCoords[ self.n ]
         self.open(auto=auto)
+        # Try to return the information about the current score
+        # if it doesn't exist, return an empty string
+        try:
+            return self.scores[ self.n ][6]
+        except KeyError:
+            return ""
 
     def openPrevious(self, auto=False):
         self.n = self.n - 1
-        self.row, self.col, self.x, self.y = self.gridCoords[ self.n ]
-        self.open(auto=auto)
+        if self.n < 0:
+            self.n = 0
+        else:
+            self.row, self.col, self.x, self.y = self.gridCoords[ self.n ]
+            self.open(auto=auto)
+        return self.scores[ self.n ][6]
     
     def open( self, auto=False ):
         self.openImage.close()        
@@ -141,30 +158,22 @@ class GridReader:
         else:
             self.openImage.getProcessor().setMinAndMax(self.min, self.max)
             self.openImage.updateAndDraw()
-
-# def dialogMinMax(gridObject):
-#     gd = GenericDialog('Set new min and max')
-#     gd.addNumericField('Min: ', gridObject.getMin(), 0)
-#     gd.addNumericField('Max: ', gridObject.getMax(), 0)
-#     minField = gd.getNumericFields().get(0)
-#     maxField = gd.getNumericFields().get(1)
-#     gd.showDialog()
-#     if not gd.wasCanceled():
-#         newMin = gd.getNextNumber()
-#         newMax = gd.getNextNumber()
-#         gridObject.setMinAndMax(newMin, newMax)
- 
-
-
-
-################### GUI
+            
+################### GUI classes
+# Each of the following classes are used in the GUI frame
+# Note that they inherit java swing classes
+# Each class implements a method that is called by the
+# swing class. When the action operates on another
+# field, the field is passed in the intialization of the class
 
 class ChangedMin(ActionListener):
+    """ A listener that will update the current image with
+    a new min when it's field is changed"""
     def __init__(self, field):
         self.field = field
     def actionPerformed(self, event):
         global plateGrid
-        newValue = self.field.getText()
+        newValue = int(self.field.getText())
         currentMax = plateGrid.getMax()
         plateGrid.setMinAndMax(newValue, currentMax)
 
@@ -173,25 +182,31 @@ class ChangedMax(ActionListener):
         self.field = field
     def actionPerformed(self, event):
         global plateGrid
-        newValue = self.field.getText()
+        newValue = int(self.field.getText())
+        print newValue
         currentMin = plateGrid.getMin()
         plateGrid.setMinAndMax(currentMin, newValue)
 
 class NextImage(ActionListener):
-  def actionPerformed(self, event):
-      global plateGrid
-      global listener
-      global frame
-      plateGrid.openNext()
-      frame.setVisible(True)
+    def __init__(self, field):
+        self.scoreField = field
+    def actionPerformed(self, event):
+        global plateGrid
+        global frame
+        score = plateGrid.openNext()
+        self.scoreField.setText(score)
+        frame.setVisible(True)
 
 class PreviousImage(ActionListener):
-  def actionPerformed(self, event):
-      global plateGrid
-      global listener
-      global frame
-      plateGrid.openPrevious()
-      frame.setVisible(True)
+    def __init__(self, field):
+        self.scoreField = field
+    def actionPerformed(self, event):
+        global plateGrid
+        global frame
+        score = plateGrid.openPrevious()
+        print score
+        self.scoreField.setText(score)
+        frame.setVisible(True)
 
 class WriteScore(ActionListener):
     def __init__(self, field):
@@ -208,74 +223,40 @@ class Closing(WindowAdapter):
         plateGrid.close()
         pass
 
-# class NextImageListener(KeyAdapter):
-#     def keyPressed(self, keyEvent):
-#         global plateGrid
-#         global frame
-#         IJ.log("clicked keyCode " + str(keyEvent.getKeyCode()))
-#         keyPressed = keyEvent.getKeyCode()
-#         if keyPressed == 78: # This is the 'n' key
-#             plateGrid.openNext()
-#             frame.setVisible(True)
-#         if keyPressed == 10: # This is the 'enter' key
-#             plateGrid.openNext()
-#             frame.setVisible(True)
-#         # Prevent further propagation of the key event:
-#         keyEvent.consume()
 
+###### 
+    
 plateGrid = GridReader(fp = "/Users/cm/Desktop/CCM_scorer/plate-001_plate1")
 
+minField = JFormattedTextField( plateGrid.getMin() )
+minField.addActionListener( ChangedMin(minField) )
+
+maxField = JFormattedTextField( plateGrid.getMax() )
+maxField.addActionListener( ChangedMax(maxField) )
+
+scoreField = JTextField( "" )
+scoreField.addActionListener( NextImage(scoreField) )
+scoreField.addActionListener( WriteScore(scoreField) )
+
+button = JButton("Previous image")
+button.addActionListener( PreviousImage(scoreField) )
+
+# Pack all the fields into a JPanel
 all = JPanel()
 layout = GridLayout(4, 1)
 all.setLayout(layout)
-
 all.add( JLabel("  ") )
-button = JButton("Previous image")
-button.addActionListener( PreviousImage() )
-#button.addKeyListener(NextImageListener())
 all.add( button )
-
 all.add( JLabel("Min") )
-textField1 = JFormattedTextField( plateGrid.getMin() )
-textField1.addActionListener( ChangedMin(textField1) )
-#textField1.addKeyListener(listener)
-all.add(textField1)
-
+all.add( minField )
 all.add( JLabel("Max") )
-textField2 = JFormattedTextField( plateGrid.getMax() )
-textField2.addActionListener( ChangedMax(textField2) )
-#textField2.addKeyListener(listener)
-all.add(textField2)
-
+all.add(maxField )
 all.add( JLabel("Score :") )
-scoreField = JTextField( "" )
-scoreField.addActionListener( WriteScore(scoreField) )
-scoreField.addActionListener( NextImage() )
-#textField3.addKeyListener( NextImageListener() )
 all.add(scoreField)
-
 frame = JFrame("CCM scoring")
 frame.getContentPane().add(JScrollPane(all))
 frame.pack()
 frame.addWindowListener( Closing() )
 scoreField.requestFocusInWindow()
 frame.setVisible(True)
-
-
-
-
-
-#plateGrid.setMinMax(76, 136)
-#imp = plateGrid.openNext()
-
-
-#dialogMinMax(plateGrid)
-
-
-# from java.awt import Color
-# from java.awt.event import TextListener
-# from ij import IJ
-# from ij import Menus
-# from ij.gui import GenericDialog
-
 
