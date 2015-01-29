@@ -6,32 +6,72 @@ from ij.gui import Roi, Overlay, GenericDialog
 from java.awt.event import KeyEvent, KeyAdapter, ActionListener, WindowAdapter
 from javax.swing import JScrollPane, JPanel, JComboBox, JLabel, JFrame, JButton, JFormattedTextField, JTextField
 from java.awt import Color, GridLayout
+from random import shuffle
+
 
 # Keycode 78 is "n"
 
 class GridReader:    
-    def __init__(self, fp = None):
+    def __init__(self, fp = None, shuffleGrid=True):
+        # Initialize the filepath to the grid file
         if fp is None:
             self.fp = IJ.getFilePath("Grid file")
         else:
             self.fp = fp
+        # Get the directory, the name of the grid, and the name of the image
+        self.initializeFilenames()
+        # Read the first line of the file
         self.reader = csv.reader( open(self.fp,"r"), delimiter="\t" )
         firstLine = self.reader.next()
         try:
             self.rows, self.columns, self.width = tuple(firstLine)
+            self.rows = int(self.rows)
+            self.columns = int(self.columns)
+            self.width = int(self.width)
         except ValueError:
             raise ValueError("There are the wrong number of fields on the first line")
         self.loadSourceImage()
         self.openImage = ImagePlus()
+        self.initializeGridCoords()
+        if shuffle:
+            shuffle(self.gridCoords)
+        self.n = 0
         self.openNext(auto=True)
     
-    def loadSourceImage( self ):
-        head, tail = os.path.split( self.fp )
-        fn, ext = os.path.splitext( tail )
-        fnSplit = fn.split("_")
+    def initializeFilenames(self):
+        # Save the directory to the grid file
+        self.directory, gridfile = os.path.split( self.fp )
+        # Get the name of the grid file without the extension
+        # This is the "plateID" which is the concatenation of the image
+        # and the grid IDs
+        self.plateID, ext = os.path.splitext( gridfile )
+        # This expect that the grid file will be named according to
+        # imageID_plateID  This allows for multiple grids per plate
+        fnSplit = self.plateID.split("_")
         if len(fnSplit) != 2:
             raise ValueError("File name is not formatted properly")
-        imgPath = os.path.join(head, fnSplit[0] + ".tif")
+        # Save the imageID for later
+        self.imageID, tmp = fnSplit
+
+    def initializeGridCoords(self):
+        self.gridCoords = []
+        row = 1
+        col = 1
+        for x,y in self.reader:
+            if col > self.columns:
+                col = 1
+                row = row + 1
+            self.gridCoords.append( (row, col, x, y) )
+            col = col + 1
+        # This was here for testing
+        # f =  open( os.path.join(self.directory, self.plateID + ".csv"), "w")
+        # writer = csv.writer(f, delimiter=",")
+        # for tmp in self.gridCoords:
+        #     writer.writerow(tmp)
+        # f.close()        
+        
+    def loadSourceImage( self ):
+        imgPath = os.path.join(self.directory, self.imageID + ".tif")
         img = ImagePlus(imgPath)
         if img is None:
             raise ValueError("Couldn't find the image")
@@ -39,8 +79,8 @@ class GridReader:
     
     def openNext( self, auto=False ):
         self.openImage.close()
-        # Reads in the next grid coordinates
-        x,y = self.reader.next()
+        #
+        row, col, x, y = self.gridCoords[ self.n ]
         # Set the ROI on the source image
         roi = Roi(int(x), int(y), int(self.width), int(self.width))
         self.sourceImage.setRoi(roi)
@@ -51,6 +91,7 @@ class GridReader:
         self.openImage = ImagePlus(" ", processor)
         self.setContrast(auto)
         self.openImage.show()
+        self.n = self.n + 1
         return self.openImage
     
     def setMinAndMax(self, minVal, maxVal):
