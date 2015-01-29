@@ -59,10 +59,14 @@ class GridReader:
         self.out = open( os.path.join(self.directory, self.plateID + "_scores.csv"), "w" )
         self.writer = csv.writer(self.out, delimiter=",")
         self.writer.writerow(["row", "col", "x", "y", "min", "max", "score"])
+        self.out.close()
 
     def writeScore(self, score):
+        self.out = open( os.path.join(self.directory, self.plateID + "_scores.csv"), "a" )
+        self.writer = csv.writer(self.out, delimiter=",")
         self.writer.writerow( [self.row, self.col, self.x,
                                self.y, self.min, self.max, score])
+        self.out.close()
     
     def close(self):
         self.sourceImage.close()
@@ -181,6 +185,14 @@ class NextImage(ActionListener):
       plateGrid.openNext()
       frame.setVisible(True)
 
+class PreviousImage(ActionListener):
+  def actionPerformed(self, event):
+      global plateGrid
+      global listener
+      global frame
+      plateGrid.openPrevious()
+      frame.setVisible(True)
+
 class WriteScore(ActionListener):
     def __init__(self, field):
         self.field = field
@@ -218,8 +230,8 @@ layout = GridLayout(4, 1)
 all.setLayout(layout)
 
 all.add( JLabel("  ") )
-button = JButton("Next image")
-button.addActionListener( NextImage() )
+button = JButton("Previous image")
+button.addActionListener( PreviousImage() )
 #button.addKeyListener(NextImageListener())
 all.add( button )
 
