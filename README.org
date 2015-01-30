@@ -10,13 +10,13 @@ This plugin implements a simple interface that: 1) crops sub-images from a large
 - Download the "Microarray Profile" plugin from [[http://www.optinav.com/MicroArray_Profile.htm][here]].
 - Clone the =fiji-ccm-scoring= repository or download the source
 - Open Fiji
-- Go to =Plugins -> Install=
-- Navigate to each plugin sequentially and double click them to install them
+- Go to =Plugins -> Install= and choose the =Microarray Profile= .jar file.
+- Go to =Plugins -> Install= and choose the =ccm-scoring_.py= in this folder.
 - Go to =Plugins -> Scripting -> Refresh Jython Scripts=
-- There should now be plugins called =ccm-scoring= and =Microarray Profile= in the Plugins menu
+- There should now be plugins called =ccm-scoring= and =Microarray Profile= in the Plugins menu.
 
 ** Name your files appropriately
-- Each image you're going to score should be named something memorable (maybe the date?) with no underscores and no special characters (e.g. spaces, dollar signs, etc.)
+- Each image you're going to score should be named something memorable with no underscores and no special characters (e.g. spaces, dollar signs, etc.)
 - Each image should be a =tif= file and should end with the extension =.tif=
 
 ** Create a grid
@@ -32,7 +32,7 @@ This plugin implements a simple interface that: 1) crops sub-images from a large
 3. Shift-drag a spot in the interior of the opposite edge until that edge is lined up with the spots. Unless the pattern of spots is distorted, all of the ROIs should now be aligned.
 #+end_quote
 
-- An example of an aligned grid is [[file:tutorial_images/aligned_grid.png][here]]. Note that each colony is completely contained in each circle. It's OK that the circles overlap with each other.
+- An image of an aligned grid is [[file:tutorial_images/aligned_grid.png][here]]. Note that each colony is completely contained in each circle. It's OK that the circles overlap with each other.
 - Once your grid has been aligned, hit the =Save Grid= button in the =Microarray Profile= interface.
 - *IMPORTANT* Save the grid in exactly this format: "plateName_gridName". Where "plateName" is *exactly* the same name as the image that the grid was aligned on but without the =.tif= extension. "gridName" can be any name that doesn't contain underscores. For example, if your image was called =example.tif=, you could save your grid to be called =example_plate1=.
 - Once you save your grid hit the =Quit= button in the =Microarray Profile= interface
