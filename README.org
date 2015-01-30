@@ -34,7 +34,7 @@ This plugin implements a simple interface that: 1) crops sub-images from a large
 
 - An image of an aligned grid is [[file:tutorial_images/aligned_grid.png][here]]. Note that each colony is completely contained in each circle. It's OK that the circles overlap with each other.
 - Once your grid has been aligned, hit the =Save Grid= button in the =Microarray Profile= interface.
-- *IMPORTANT* Save the grid in exactly this format: "plateName_gridName". Where "plateName" is *exactly* the same name as the image that the grid was aligned on but without the =.tif= extension. "gridName" can be any name that doesn't contain underscores. For example, if your image was called =example.tif=, you could save your grid to be called =example_plate1=.
+- *IMPORTANT* Save the grid in exactly this format: "plateName_gridName". Where "plateName" is *exactly* the same name as the image that the grid was aligned on but without the =.tif= extension. "gridName" can be any name that doesn't contain underscores. For example, if your image was called =example.tif=, you could save your grid to be called =example_plate1=. *ALSO* the grid file must be saved in the same folder as the image file the grid was aligned on.
 - Once you save your grid hit the =Quit= button in the =Microarray Profile= interface
 
 ** Score the images
