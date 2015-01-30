@@ -7,7 +7,7 @@ This plugin is designed to help score complex colony morphology (CCM) in yeast. 
 This plugin implements a simple interface that: 1) crops sub-images from a larger image based on a grid; 2) displays the sub-images in a random order; 3) gets and records a user-entered score; and 4) generates a simple HTML report that matches the images to the score to allow a user to check their scoring. The plugin requires the ImageJ plugin =Microarray Profile= to generate a grid of coordinates for the images that are cropped and displayed.
 
 ** Install the plugins
-- Download the "Microarray Profile" plugin from [[http://www.optinav.com/MicroArray_Profile.htm][here]].
+- Download the "Microarray Profile" plugin from [[http://www.optinav.com/MicroArray_Profile.htm][here]]. 
 - Clone the =fiji-ccm-scoring= repository or download the source
 - Open Fiji
 - Go to =Plugins -> Install= and choose the =Microarray Profile= .jar file.
@@ -47,3 +47,5 @@ This plugin implements a simple interface that: 1) crops sub-images from a large
 - If you want to go back to previous images, hit the "Previous Image" button. The scores you entered will be displayed along with the image they go with. To navigate forward again, select the scoring box and hit ENTER. If you change a score, it's saved in the csv file of the scores.
 - When you get to the end of the images, a dialog box will pop up telling you there's no more images. To exit, close the "CCM scoring" window.
 - When you close the window, the script will generate an HTML file that displays the thumbnails and the scores that you gave to them. The report is called "plateName_gridName.html"
+** Warning!
+- The plugin will not currently allow you to amend scores. If you try to open a file that has already been written the script will ask you if you want to continue. If you do continue all existing scores will be overwritten.
