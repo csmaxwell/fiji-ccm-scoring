@@ -1,5 +1,10 @@
+#+TITLE: A subjective scoring plugin for FIJI
+#+AUTHOR: Colin S. Maxwell
 
+** Purpose
+This plugin is designed to help score complex colony morphology (CCM) in yeast. Yeast are assayed for complex colony morphology by pinning them onto agar trays in a 96-well plate format. The trays are then scanned and the individual wells are scored based on a subjective metric of colony complexity. For a description of this method of scoring CCM, see [[http://dx.doi.org/10.1371/journal.pgen.1000823][Granek et al. 2010]] and [[http://dx.doi.org/10.1534/genetics.112.142067][Granek et al. 2013]].
 
+This plugin implements a simple interface that randomly displays wells from a grid of images and gets and records a user-entered score. It also generates a simple HTML report that matches the images to the score to allow a user to check their scoring. The plugin requires the ImageJ plugin =Microarray Profile= to generate a grid of coordinates for the images that are cropped and displayed.
 
 ** Install the plugins
 - Download the "Microarray Profile" plugin from [[http://www.optinav.com/MicroArray_Profile.htm][here]].
@@ -9,9 +14,11 @@
 - Navigate to each plugin sequentially and double click them to install them
 - Go to =Plugins -> Scripting -> Refresh Jython Scripts=
 - There should now be plugins called =ccm-scoring= and =Microarray Profile= in the Plugins menu
+
 ** Name your files appropriately
 - Each image you're going to score should be named something memorable (maybe the date?) with no underscores and no special characters (e.g. spaces, dollar signs, etc.)
 - Each image should be a =tif= file and should end with the extension =.tif=
+
 ** Create a grid
 - Open the image to be scored in Fiji
 - Go to =Plugins -> Microarray Profile=
@@ -28,6 +35,15 @@
 - An example of an aligned grid is [[file:tutorial_images/aligned_grid.png][here]]. Note that each colony is completely contained in each circle. It's OK that the circles overlap with each other.
 - Once your grid has been aligned, hit the =Save Grid= button in the =Microarray Profile= interface.
 - *IMPORTANT* Save the grid in exactly this format: "plateName_gridName". Where "plateName" is *exactly* the same name as the image that the grid was aligned on but without the =.tif= extension. "gridName" can be any name that doesn't contain underscores. For example, if your image was called =example.tif=, you could save your grid to be called =example_plate1=.
+- Once you save your grid hit the =Quit= button in the =Microarray Profile= interface
 
 ** Score the images
-- Go to =ccm-scorign=
+- Go to =Plugins -> ccm-scoring= in Fiji.
+- You will be prompted to navigate to a file. Choose the grid file that you just saved.
+- A random cell from the plate will be displayed. Type the score into the score box and hit enter to get the next image.
+- Adjust the contrast so that the background is black and there are no saturated pixels. Do this by clicking on the image and going to =Image -> Adjust -> Brightness/Contrast=. Adjust the minimum slider in the box that says "B&C" until the background is black. Then type in the number that the minimum is set to in the "Min" field in the "CCM scoring" window and hit ENTER. Do the same with the Maximum. The settings that are displayed in the "CCM scoring" box will be applied to each image.
+- When each image is opened, a JPEG image is stored in a folder called "plateName_gridName_cropped" the contrast settings that a current will be applied to the image that is saved.
+- When you type in a score, it is saved in a file called "plateName_gridName_scores.csv".
+- If you want to go back to previous images, hit the "Previous Image" button. The scores you entered will be displayed along with the image they go with. To navigate forward again, select the scoring box and hit ENTER. If you change a score, it's saved in the csv file of the scores.
+- When you get to the end of the images, a dialog box will pop up telling you there's no more images. To exit, close the "CCM scoring" window.
+- When you close the window, the script will generate an HTML file that displays the thumbnails and the scores that you gave to them. The report is called "plateName_gridName.html"
