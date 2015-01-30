@@ -4,7 +4,7 @@
 ** Purpose
 This plugin is designed to help score complex colony morphology (CCM) in yeast. Yeast are assayed for complex colony morphology by pinning them onto agar trays in a 96-well plate format. The trays are then scanned and the individual wells are scored based on a subjective metric of colony complexity. For a description of this method of scoring CCM, see [[http://dx.doi.org/10.1371/journal.pgen.1000823][Granek et al. 2010]] and [[http://dx.doi.org/10.1534/genetics.112.142067][Granek et al. 2013]].
 
-This plugin implements a simple interface that randomly displays wells from a grid of images and gets and records a user-entered score. It also generates a simple HTML report that matches the images to the score to allow a user to check their scoring. The plugin requires the ImageJ plugin =Microarray Profile= to generate a grid of coordinates for the images that are cropped and displayed.
+This plugin implements a simple interface that: 1) crops sub-images from a larger image based on a grid; 2) displays the sub-images in a random order; 3) gets and records a user-entered score; and 4) generates a simple HTML report that matches the images to the score to allow a user to check their scoring. The plugin requires the ImageJ plugin =Microarray Profile= to generate a grid of coordinates for the images that are cropped and displayed.
 
 ** Install the plugins
 - Download the "Microarray Profile" plugin from [[http://www.optinav.com/MicroArray_Profile.htm][here]].
