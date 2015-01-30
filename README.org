@@ -22,7 +22,7 @@ This plugin implements a simple interface that: 1) crops sub-images from a large
 ** Create a grid
 - Open the image to be scored in Fiji
 - Go to =Plugins -> Microarray Profile=
-- For 96 well plates, you can load the grid =example_plate1= in the repository to display a grid. Alternatively, you can make your own using the =Microarray Profile= interface.
+- For 96 well plates, you can load the grid =example2_plate1= in the repository to display a grid. Alternatively, you can make your own using the =Microarray Profile= interface.
 - These are the instructions from the =Microarray Profile= website for aligning a grid:
 
 #+begin_quote
