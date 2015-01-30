@@ -1,10 +1,11 @@
-""" CCM Scoring
+"""
+CCM Scoring Plugin
 Author: Colin S. Maxwell
 
 This plugin takes a grid of coordinates that mark out sub-images on
 a larger image (e.g. wells of a 96-well plate) and crops the larger
 image on those coordinates then displays the sub-images and records
-a subjective score for each image.
+a subjective score for each image. See README.org for usage.
 
 """
 
