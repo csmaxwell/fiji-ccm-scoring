@@ -39,13 +39,20 @@ This plugin implements a simple interface that: 1) crops sub-images from a large
 
 ** Score the images
 - Go to =Plugins -> ccm-scoring= in Fiji.
-- You will be prompted to navigate to a file. Choose the grid file that you just saved.
-- A random cell from the plate will be displayed. Type the score into the score box and hit enter to get the next image.
-- Adjust the contrast so that the background is black and there are no saturated pixels. Do this by clicking on the image and going to =Image -> Adjust -> Brightness/Contrast=. Adjust the minimum slider in the box that says "B&C" until the background is black. Then type in the number that the minimum is set to in the "Min" field in the "CCM scoring" window and hit ENTER. Do the same with the Maximum. The settings that are displayed in the "CCM scoring" box will be applied to each image.
-- When each image is opened, a JPEG image is stored in a folder called "plateName_gridName_cropped" the contrast settings that a current will be applied to the image that is saved.
-- When you type in a score, it is saved in a file called "plateName_gridName_scores.csv".
+- You will be prompted to navigate to a file. You can choose as many grid files as you like. However, the full image that the grid was defined on will be opened, so if you try to open up too many you may run out of memory.
+- You will be prompted for a score file name. Type in whatever you like (let's say "example-scores.csv"). If you type in the name of a previous score file, you will append data onto it. *Note:* to append data onto a previous score file, you should first select the same grids that were being used previously. Otherwise, the program might crash.
+- A random cell from a random plate will be displayed. 
+- Adjust the contrast so that the background is black and there are no saturated pixels by typing in numbers into the =Min= and =Max= fields.
+- Type the score into the score box and hit enter to get the next image.
+- When each image is opened, a JPEG image is stored in the same folder as the first grid file and will be called something like "example-scores_cropped" the contrast settings that a current will be applied to the image that is saved. (But, see the bug below)
+- When you type in a score, it is saved in the same folder as the first grid file and will be named by your scores.
 - If you want to go back to previous images, hit the "Previous Image" button. The scores you entered will be displayed along with the image they go with. To navigate forward again, select the scoring box and hit ENTER. If you change a score, it's saved in the csv file of the scores.
 - When you get to the end of the images, a dialog box will pop up telling you there's no more images. To exit, close the "CCM scoring" window.
-- When you close the window, the script will generate an HTML file that displays the thumbnails and the scores that you gave to them. The report is called "plateName_gridName.html"
-** Warning!
-- The plugin will not currently allow you to amend scores. If you try to open a file that has already been written the script will ask you if you want to continue. If you do continue all existing scores will be overwritten.
+- When you close the window, the script will generate an HTML file that displays the thumbnails and the scores that you gave to them. The report is called something like "example-scores.html" A second file is generated called something like "example-scores-with-plate-positions.html". This has the names of the plates and the positions so that you can correct your scores.
+
+** TODOs
+- Crop the source image to save memory
+- Auto-load grids for previous data
+
+** Bugs
+- Currently, when you change the min and the max, the image updates properly, but the current thumbnail is not saved with the new min/max 
