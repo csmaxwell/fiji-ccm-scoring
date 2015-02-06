@@ -9,7 +9,7 @@ a subjective score for each image. See README.org for usage.
 
 """
 
-import csv, os
+import csv, os, sys
 import ij.IJ
 import ij.gui
 import ij.io
@@ -17,9 +17,10 @@ from ij.io import FileSaver
 from ij import IJ, ImagePlus, WindowManager
 from ij.gui import Roi, Overlay, GenericDialog
 from java.awt.event import KeyEvent, KeyAdapter, ActionListener, WindowAdapter
-from javax.swing import JScrollPane, JPanel, JComboBox, JLabel, JFrame, JButton, JFormattedTextField, JTextField
+from javax.swing import JScrollPane, JPanel, JComboBox, JLabel, JFrame, JButton, JFormattedTextField, JTextField, JFileChooser
 from java.awt import Color, GridLayout
 from random import shuffle
+from java.io import File
 
 
 ###########################################################################
@@ -354,74 +355,6 @@ class GridReader:
             self.openImage.getProcessor().setMinAndMax(self.min, self.max)
             self.openImage.updateAndDraw()
             
-###########################################################################
-#####                       Begin GUI classes                         #####
-###########################################################################
-
-# Each of the following classes are used in the GUI frame
-# Note that they inherit java swing classes
-# Each class implements a method that is called by the
-# swing class. When the action operates on another
-# field, the field is passed in the intialization of the class
-
-class ChangedMin(ActionListener):
-    """ A listener that will update the current image with
-    a new min when it's field is changed"""
-    def __init__(self, field):
-        self.field = field
-    def actionPerformed(self, event):
-        global plateGrid
-        newValue = int(self.field.getText())
-        currentMax = plateGrid.getMax()
-        plateGrid.setMinAndMax(newValue, currentMax)
-
-class ChangedMax(ActionListener):
-    def __init__(self, field):
-        self.field = field
-    def actionPerformed(self, event):
-        global plateGrid
-        newValue = int(self.field.getText())
-        currentMin = plateGrid.getMin()
-        plateGrid.setMinAndMax(currentMin, newValue)
-
-class NextImage(ActionListener):
-    def __init__(self, field):
-        self.scoreField = field
-    def actionPerformed(self, event):
-        global plateGrid
-        global frame
-        score = plateGrid.openNext()
-        if score is not None:
-            self.scoreField.setText(score)
-            frame.setVisible(True)
-
-class PreviousImage(ActionListener):
-    def __init__(self, field):
-        self.scoreField = field
-    def actionPerformed(self, event):
-        global plateGrid
-        global frame
-        score = plateGrid.openPrevious()
-        self.scoreField.setText(score)
-        frame.setVisible(True)
-
-class WriteScore(ActionListener):
-    def __init__(self, field):
-        self.field = field
-    def actionPerformed(self, event):
-        global plateGrid
-        global frame
-        plateGrid.writeScore( self.field.getText() )
-
-class Closing(WindowAdapter):
-    def windowClosing(self,e):
-        global plateGrid
-        plateGrid.close()
-        pass
-
-###########################################################################
-#####                       End GUI classes                           #####
-###########################################################################
 
 ###########################################################################
 #####                       Begin HTML.py                             #####
@@ -748,13 +681,97 @@ def list(*args, **kwargs):
 
 
 ###########################################################################
+#####                       Begin GUI classes                         #####
+###########################################################################
+
+# Each of the following classes are used in the GUI frame
+# Note that they inherit java swing classes
+# Each class implements a method that is called by the
+# swing class. When the action operates on another
+# field, the field is passed in the intialization of the class
+
+class ChangedMin(ActionListener):
+    """ A listener that will update the current image with
+    a new min when it's field is changed"""
+    def __init__(self, field):
+        self.field = field
+    def actionPerformed(self, event):
+        global plateGrids
+        for plateGrid in plateGrids:
+            newValue = int(self.field.getText())
+            currentMax = plateGrid.getMax()
+            plateGrid.setMinAndMax(newValue, currentMax)
+
+class ChangedMax(ActionListener):
+    def __init__(self, field):
+        self.field = field
+    def actionPerformed(self, event):
+        global plateGrids
+        for plateGrid in plateGrids:
+            newValue = int(self.field.getText())
+            currentMin = plateGrid.getMin()
+            plateGrid.setMinAndMax(currentMin, newValue)
+
+class NextImage(ActionListener):
+    def __init__(self, field):
+        self.scoreField = field
+    def actionPerformed(self, event):
+        global plateGrids
+        global currentGrid
+        global frame
+        # get a random plate grid
+        currentGrid = random.choice(plateGrids)
+        score = currentGrid.openNext()
+        if score is not None:
+            self.scoreField.setText(score)
+            frame.setVisible(True)
+
+class PreviousImage(ActionListener):
+    def __init__(self, field):
+        self.scoreField = field
+    def actionPerformed(self, event):
+        global plateGrids
+        global frame
+        score = plateGrid.openPrevious()
+        self.scoreField.setText(score)
+        frame.setVisible(True)
+
+class WriteScore(ActionListener):
+    def __init__(self, field):
+        self.field = field
+    def actionPerformed(self, event):
+        global frame
+        plateGrid.writeScore( self.field.getText() )
+
+class Closing(WindowAdapter):
+    def windowClosing(self,e):
+        global plateGrid
+        plateGrid.close()
+        pass
+
+###########################################################################
+#####                       End GUI classes                           #####
+###########################################################################
+
+
+###########################################################################
 #####                       Main code                                 #####
 ###########################################################################
 
-# Initialize the grid reader
-plateGrid = GridReader()
 
-if not plateGrid.cancelled:
+chooser = JFileChooser()
+chooser.setMultiSelectionEnabled(True)
+chooser.showOpenDialog(JPanel())
+chooser.setCurrentDirectory( File(os.path.expanduser("~")))
+fp = chooser.getSelectedFiles()
+
+if chooser.APPROVE_OPTION != 0:
+    # Initialize the grid readers
+    plateGrids = [GridReader(i) for i in fp]
+
+    global plateGrid
+    plateGrid = random.choice( plateGrids )
+    
     # Set up the fields for the SWING interface
     minField = JFormattedTextField( plateGrid.getMin() )
     minField.addActionListener( ChangedMin(minField) )
