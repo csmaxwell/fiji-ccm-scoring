@@ -393,36 +393,7 @@ class GridReader:
         # Get the directory, the name of the grid, and the name of the image
         self.initializeFilenames()
         self.loadSourceImage()
-        self.openImage = ImagePlus()
         self.initializeGridCoords()
-        if shuffle:
-            shuffle(self.gridCoords)
-        # This is the current grid position
-        self.n = -1
-        # This keeps track of how far into the grid you've been
-        self.maxN = -1
-        # Dictionary to store the score. Keys are the position in the
-        # grid (self.n). Scores are stored as a tuple with the following:
-        # (row, col, x, y, min, max, score)
-        self.scores = {}
-        # Generate a spot for the HTML report to live in along with the thumbnails
-        # self.reportDir = os.path.join(self.directory, self.plateID + "_report")
-        self.thumbSubDir = self.plateID + "_cropped"
-        self.thumbDir = os.path.join(self.directory, self.thumbSubDir)
-        self.scoreFile = os.path.join(self.directory, self.plateID + "_scores.csv")
-        if os.path.isfile( self.scoreFile ):
-            gd = GenericDialog("")
-            gd.addMessage("Scores exist for this grid. Continue?")
-            gd.showDialog()
-            if gd.wasCanceled():
-                self.cancelled=True
-                return None
-        self.cancelled = False
-        try:
-            os.mkdir(self.thumbDir)
-        except OSError:
-            pass
-        #self.openNext(auto=True)
     
     def initializeFilenames(self):
         # Save the directory to the grid file
@@ -445,8 +416,6 @@ class GridReader:
         when the GUI frame is closed
         """
         self.sourceImage.close()
-        self.openImage.close()
-        self.writeReport()
         
     def initializeGridCoords(self):
         """
@@ -471,7 +440,7 @@ class GridReader:
             if col > self.columns:
                 col = 1
                 row = row + 1
-            self.gridCoords.append( (row, col, x, y) )
+            self.gridCoords.append( (self.plateID, row, col, x, y) )
             col = col + 1
         inGrid.close()
         
@@ -484,55 +453,8 @@ class GridReader:
         if img is None:
             raise ValueError("Couldn't find the image")
         self.sourceImage = img
-
-    def openNext(self, auto=False, thumbNails = True):
-        """
-        Opens the next image.
-
-        Arguments:
-        - auto : bool, if True the image is autoscaled
-        - thumbNails : bool, if True a thumbnail for th
-          image is written when the image is opened
-        """
-        # Stop if you're done with the plate
-        if self.n + 2 > int(self.rows) * int(self.columns):
-            gd = GenericDialog("")
-            gd.addMessage("No more images")
-            gd.showDialog()
-            return None
-        # Set the current number being examined
-        self.n = self.n + 1
-        self.row, self.col, self.x, self.y = self.gridCoords[ self.n ]
-        # open the file
-        self.openSubImage(auto=auto)
-        # Write the thumbnail
-        if thumbNails:
-            self.writeThumbnail()
-        # Try to return the information about the current score
-        # if it doesn't exist, return an empty string. This
-        # is used to display the score associated with the image
-        try:
-            return self.scores[ self.n ][6]
-        except KeyError:
-            return ""
-
-    def openPrevious(self, auto=False):
-        """
-        Opens the previous image.
-
-        Arguments:
-        - auto : bool, if True the image is autoscaled
-        """
-        self.n = self.n - 1
-        if self.n < 0:
-            self.n = 0
-        else:
-            self.row, self.col, self.x, self.y = self.gridCoords[ self.n ]
-            self.openSubImage(auto=auto)
-        # Retun the score of the image so it can be displayed
-        return self.scores[ self.n ][6]
     
-    def openSubImage( self, auto=False ):
+    def openSubImage( self, x, y, auto=False ):
         """
         This method is called by both openPrevious and openNext to
         display an image that is cropped from the sourceImage based
@@ -541,30 +463,74 @@ class GridReader:
         Arguments:
         - auto : bool, if True the image is autoscaled
         """
-        self.openImage.close()        
         # Set the ROI on the source image
-        roi = Roi(int(self.x), int(self.y), int(self.width), int(self.width))
+        #roi = Roi(int(self.x), int(self.y), int(self.width), int(self.width))
+        roi = Roi( int(x), int(y), int(self.width), int(self.width) )
         self.sourceImage.setRoi(roi)
         # Get a processor corresponding to a cropped version of the image
         processor = self.sourceImage.getProcessor().crop()
         self.sourceImage.killRoi()
         # Make a new image of image and run contrast on it
-        self.openImage = ImagePlus(" ", processor)
-        self.setContrast(auto)
-        self.openImage.show()
-        return self.openImage
+        openImage = ImagePlus(" ", processor)
+        return openImage
 
-    def writeThumbnail(self):
-        """
-        This method is called by openNext to write a jpeg of
-        the current image to the thumbnails folder
-        """
-        fs = FileSaver(self.openImage)
-        imName = "_".join([ str(self.plateID), str(self.row), str(self.col) ] ) + ".jpg"
-        imName = os.path.join(self.thumbDir, imName)
-        fs.saveAsJpeg( imName )
+    def getCoords(self):
+        return self.gridCoords
+
+    def getPlateID(self):
+        return self.plateID
     
-    def setMinAndMax(self, minVal, maxVal):
+
+            
+
+class GridSet:
+    def __init__(self, fp, thumbDir, scoreFile):
+        # These will be indexed by the grid coordinates
+        self.scores = {}
+        # These will be indexed by the plateID
+        self.grids = {}
+        # Keeps the grid coordinates from each grid
+        self.gridCoords = []
+        for i in fp:
+            grid = GridReader(i)
+            # each coordinate is a tuple: (plateID, row, col, x, y)
+            gridCoords = grid.getCoords()
+            # save the grid reader in a dictionary
+            self.grids[ grid.getPlateID() ] = grid
+            # append the coordinates to the coordinates pile
+            for coord in gridCoords:
+                self.gridCoords.append(coord)
+        # shuffle the coordinates
+        shuffle(self.gridCoords)
+        self.openImage = ImagePlus()
+        self.thumbDir = thumbDir
+        self.scoreFile = scoreFile
+        self.min = 0
+        self.max = 255
+        # This is the current coordinate position
+        self.n = -1
+        # Test for scorefiles
+        if os.path.isfile( self.scoreFile ):
+            gd = GenericDialog("")
+            gd.addMessage("The scores file already exists. Overwrite?")
+            gd.showDialog()
+            if gd.wasCanceled():
+                self.cancelled=True
+                return None
+        # Generate a spot for the HTML report to live in along with the thumbnails
+        try:
+            os.mkdir(self.thumbDir)
+        except OSError:
+            pass
+        
+    def writeThumbnail(self):
+        plateID, row, col, x, y = self.currentCoordinate
+        imName = "_".join([ str(plateID), str(row), str(col) ] ) + ".jpg"
+        imName = os.path.join(self.thumbDir, imName)
+        fs = FileSaver(self.openImage)
+        fs.saveAsJpeg( imName )
+
+    def setMinAndMax(self, minVal = None, maxVal = None):
         """
         Sets the min and max of the current image
 
@@ -572,45 +538,71 @@ class GridReader:
         - minVal : integer, the minimum value for the pixel display
         - maxVal : integer, the maximum value for the pixel display
         """
-        self.min, self.max = minVal, maxVal
+        if minVal is not None:
+            self.min = minVal
+        if maxVal is not None:
+            self.max = maxVal
         self.openImage.getProcessor().setMinAndMax(self.min, self.max)
         self.openImage.updateAndDraw()
         self.writeThumbnail()
-
-    def getMin(self):
+            
+    def openNext(self, thumbNails = True):
         """
-        Get the current minimum pixel display value
-        """
-        return self.min
-
-    def getMax(self):
-        """
-        Get the current maximum pixel display value
-        """
-        return self.max
-    
-    def setContrast(self, auto=False):
-        """
-        Set the contrast of the image based on either autoscaling
-        the image or setting the min and max to the current saved
-        min and max
+        Opens the next image.
 
         Arguments:
         - auto : bool, if True the image is autoscaled
+        - thumbNails : bool, if True a thumbnail for th
+          image is written when the image is opened
         """
-        if auto:
-            IJ.run(self.openImage, "Enhance Contrast", "saturated=0.35")
-            self.min = self.openImage.getProcessor().getMin()
-            self.max = self.openImage.getProcessor().getMax()
+        self.openImage.close()
+        # Set the current number being examined
+        self.n = self.n + 1
+        try:
+            self.currentCoordinate = self.gridCoords[ self.n ]
+        except IndexError:
+            gd = GenericDialog("")
+            gd.addMessage("No more images")
+            gd.showDialog()
+            return None
+        plateID, row, col, x, y = self.currentCoordinate
+        # open the file
+        grid = self.grids[ plateID ]
+        self.openImage = grid.openSubImage(x,y)
+        self.setMinAndMax()
+        self.openImage.show()
+        # Write the thumbnail
+        if thumbNails:
+            self.writeThumbnail()
+        # Try to return the information about the current score
+        # if it doesn't exist, return an empty string. This
+        # is used to display the score associated with the image
+        try:
+            return self.scores[ self.currentCoordinate ][7]
+        except KeyError:
+            return ""
+
+    def openPrevious(self, auto=False):
+        """
+        Opens the previous image.
+
+        Arguments:
+        - auto : bool, if True the image is autoscale
+        """
+        self.n = self.n - 1
+        if self.n < 0:
+            self.n = 0
         else:
-            self.openImage.getProcessor().setMinAndMax(self.min, self.max)
-            self.openImage.updateAndDraw()
-            
-
-class GridSet:
-    def __init__(self):
-        self.scores = {}
-
+            self.openImage.close()
+            self.currentCoordinate = self.gridCoords[ self.n ]
+            plateID, row, col, x, y = self.currentCoordinate
+            # open the file
+            grid = self.grids[ plateID ]
+            self.openImage = grid.openSubImage(x,y)
+            self.setMinAndMax()
+            self.openImage.show()
+        # Retun the score of the image so it can be displayed
+        return self.scores[ self.currentCoordinate ][7]
 
     def writeScore(self, score):
         """
@@ -621,21 +613,24 @@ class GridSet:
         - score : string, the score to be associated with the grid
                   coordinates and the row/column info
         """
-        # When you move back, you start examining old files
-        # This keeps track of how far you've gone.
-        header = ["row", "col", "x", "y", "min", "max", "score"]
-        if self.n > self.maxN:
-            self.maxN = self.n
+        header = ["plate", "row", "col", "x", "y", "min", "max", "score"]
+        plateID, row, col, x, y = self.currentCoordinate
         # Save the info for the score in a dictionary
-        info = (self.row, self.col, self.x, self.y, self.min, self.max, score)
-        self.scores[ self.n ] = info
+        info = (plateID,
+                row,
+                col,
+                x,
+                y,
+                self.min,
+                self.max,
+                score)
+        self.scores[ self.currentCoordinate ] = info
         # initialize a writer for the scores and write a header
         self.out = open( self.scoreFile , "w" )
         writer = csv.writer(self.out, delimiter=",")
         writer.writerow(header)
-        # iterate through all the scores and write them to the disk
-        for i in range(0, self.maxN+1):
-            writer.writerow( self.scores[ i ] )
+        for i in self.scores.values():
+            writer.writerow( i )
         self.out.close() 
 
     def writeReport(self, numColumns = 5, textSize = 20):
@@ -686,6 +681,11 @@ class GridSet:
         reportOut.write( str(t) )
         reportOut.close()
 
+    def close(self):
+        self.openImage.close()
+        for grid in self.grids.values():
+            grid.close()
+
 
 
 
@@ -706,31 +706,24 @@ class ChangedMin(ActionListener):
         self.field = field
     def actionPerformed(self, event):
         global plateGrids
-        for pg in plateGrids:
-            newValue = int(self.field.getText())
-            currentMax = pg.getMax()
-            pg.setMinAndMax(newValue, currentMax)
+        newValue = int(self.field.getText())
+        plateGrid.setMinAndMax(minVal = newValue)
 
 class ChangedMax(ActionListener):
     def __init__(self, field):
         self.field = field
     def actionPerformed(self, event):
-        global plateGrids
-        for pg in plateGrids:
-            newValue = int(self.field.getText())
-            currentMin = pg.getMin()
-            pg.setMinAndMax(currentMin, newValue)
+        global plateGrid
+        newValue = int(self.field.getText())
+        plateGrid.setMinAndMax(maxVal = newValue)
 
 class NextImage(ActionListener):
     def __init__(self, field):
         self.scoreField = field
     def actionPerformed(self, event):
-        global plateGrids
-        global currentGrid
+        global plateGrid
         global frame
-        # get a random plate grid
-        currentGrid = choice(plateGrids)
-        score = currentGrid.openNext()
+        score = plateGrid.openNext()
         if score is not None:
             self.scoreField.setText(score)
             frame.setVisible(True)
@@ -739,7 +732,7 @@ class PreviousImage(ActionListener):
     def __init__(self, field):
         self.scoreField = field
     def actionPerformed(self, event):
-        global plateGrids
+        global plateGrid
         global frame
         score = plateGrid.openPrevious()
         self.scoreField.setText(score)
@@ -755,9 +748,8 @@ class WriteScore(ActionListener):
 
 class Closing(WindowAdapter):
     def windowClosing(self,e):
-        global plateGrids
-        for pg in plateGrids:
-            plateGrid.close()
+        global plateGrid
+        plateGrid.close()
 
 
 ###########################################################################
@@ -784,23 +776,21 @@ class Empty:
 chooser = Empty()
 chooser.APPROVE_OPTION = 1
 
-fp = ["/Users/cm/git/fiji-ccm-scoring/example2_plate1", "/Users/cm/git/fiji-ccm-scoring/example2_plate2"]
+fp = ["/Users/cm/git/fiji-ccm-scoring/example2_plate1",
+      "/Users/cm/git/fiji-ccm-scoring/example2_plate2"]
 
 if chooser.APPROVE_OPTION != 0:
     # Initialize the grid readers
-    plateGrids = [GridReader(i) for i in fp]
-    
-    currentGrid = choice( plateGrids )
-    currentGrid.openNext(auto=True)
-    firstMin, firstMax = currentGrid.getMin(), currentGrid.getMax()
-    for pg in plateGrids:
-        pg.setMinAndMax(firstMind, firstMax)
-    
+    plateGrid = GridSet(fp,
+                         "/Users/cm/git/fiji-ccm-scoring/cropped_files",
+                         "/Users/cm/git/fiji-ccm-scoring/testScores.csv")
+    plateGrid.openNext()
+
     # Set up the fields for the SWING interface
-    minField = JFormattedTextField( plateGrid.getMin() )
+    minField = JFormattedTextField( 0 )
     minField.addActionListener( ChangedMin(minField) )
 
-    maxField = JFormattedTextField( plateGrid.getMax() )
+    maxField = JFormattedTextField( 255 )
     maxField.addActionListener( ChangedMax(maxField) )
 
     scoreField = JTextField( "" )
