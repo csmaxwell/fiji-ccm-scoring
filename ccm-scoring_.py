@@ -352,7 +352,6 @@ def list(*args, **kwargs):
 #####                       Begin Grid Reader                         #####
 ###########################################################################
 
-# This is the 
 
 class GridReader:
     """
@@ -484,7 +483,7 @@ class GridReader:
             
 
 class GridSet:
-    def __init__(self, fp, thumbDir, scoreFile):
+    def __init__(self, fp, scoreFile, thumbDir):
         # These will be indexed by the grid coordinates
         self.scores = {}
         # These will be indexed by the plateID
@@ -505,23 +504,42 @@ class GridSet:
         self.openImage = ImagePlus()
         self.thumbDir = thumbDir
         self.scoreFile = scoreFile
+        self.reportFile = os.path.splitext(scoreFile)[0] + ".html"
+        self.reportFile2 = os.path.splitext(scoreFile)[0] + "-with-plate-positions.html"
         self.min = 0
         self.max = 255
         # This is the current coordinate position
         self.n = -1
         # Test for scorefiles
         if os.path.isfile( self.scoreFile ):
-            gd = GenericDialog("")
-            gd.addMessage("The scores file already exists. Overwrite?")
-            gd.showDialog()
-            if gd.wasCanceled():
-                self.cancelled=True
-                return None
+            print "Restoring previous scores"
+            self.restoreScores()
         # Generate a spot for the HTML report to live in along with the thumbnails
         try:
             os.mkdir(self.thumbDir)
         except OSError:
             pass
+
+    def restoreScores(self):
+        # initialize a writer for the scores and write a header
+        inFile = open( self.scoreFile , "r" )
+        reader = csv.reader(inFile, delimiter=",")
+        header = reader.next()
+        tmpCoords = []
+        for row in reader:
+            plateID, row, col, x, y, theMin, theMax, score = row
+            coord = (plateID, row, col, x, y)
+            self.scores[ coord ] = (plateID, row, col, x, y, theMin, theMax, score)
+            tmpCoords.append(coord)
+        self.min = int(theMin)
+        self.max = int(theMax)
+        self.n = len(tmpCoords) - 1
+        if self.n < 0:
+            self.n = 0
+        for coord in self.gridCoords:
+            if coord not in self.scores:
+                tmpCoords.append(coord)
+        self.gridCoords = tmpCoords
         
     def writeThumbnail(self):
         plateID, row, col, x, y = self.currentCoordinate
@@ -543,15 +561,14 @@ class GridSet:
         if maxVal is not None:
             self.max = maxVal
         self.openImage.getProcessor().setMinAndMax(self.min, self.max)
-        self.openImage.updateAndDraw()
+        self.openImage.updateChannelAndDraw()
         self.writeThumbnail()
             
-    def openNext(self, thumbNails = True):
+    def openNext(self):
         """
         Opens the next image.
 
         Arguments:
-        - auto : bool, if True the image is autoscaled
         - thumbNails : bool, if True a thumbnail for th
           image is written when the image is opened
         """
@@ -572,8 +589,7 @@ class GridSet:
         self.setMinAndMax()
         self.openImage.show()
         # Write the thumbnail
-        if thumbNails:
-            self.writeThumbnail()
+        self.writeThumbnail()
         # Try to return the information about the current score
         # if it doesn't exist, return an empty string. This
         # is used to display the score associated with the image
@@ -582,12 +598,9 @@ class GridSet:
         except KeyError:
             return ""
 
-    def openPrevious(self, auto=False):
+    def openPrevious(self):
         """
         Opens the previous image.
-
-        Arguments:
-        - auto : bool, if True the image is autoscale
         """
         self.n = self.n - 1
         if self.n < 0:
@@ -602,7 +615,10 @@ class GridSet:
             self.setMinAndMax()
             self.openImage.show()
         # Retun the score of the image so it can be displayed
-        return self.scores[ self.currentCoordinate ][7]
+        try:
+            return self.scores[ self.currentCoordinate ][7]
+        except KeyError:
+            return ""
 
     def writeScore(self, score):
         """
@@ -633,7 +649,7 @@ class GridSet:
             writer.writerow( i )
         self.out.close() 
 
-    def writeReport(self, numColumns = 5, textSize = 20):
+    def writeReport(self, reportName, thumbDir, numColumns = 5, textSize = 20, doInfo=False):
         """
         Writes an HTML report with alternating rows of
         images and their scores.
@@ -649,20 +665,23 @@ class GridSet:
         #t.rows.append(TableRow(["row", "col", "score", "image"], header=True))
         # For each score, sort by the colony morphology score
         scores = [i for i in self.scores.values()]
-        sortedScores = [i for i in sorted( scores, key=lambda info: info[6])]
+        sortedScores = [i for i in sorted( scores, key=lambda info: info[7])]
         ##### This next chunk makes a 5xn table in the HTML file with
         ##### alternating images and their scores.
         n = 0
         imgLine = []
         scoreLine = []
         for i in range(0, len(sortedScores)):
-            row, col, x, y, theMin, theMax, score = sortedScores[i]
+            plateID, row, col, x, y, theMin, theMax, score = sortedScores[i]
             # Font size is set above
             score = "<font size = '%i'>%s</font>" % (textSize, str(score))
+            imgInfo = "%s: row %s, col %s" % (plateID, str(row), str(col))
+            if doInfo:
+                score = score + "<br>" + imgInfo
             # This should be a function
-            imName = "_".join([ str(self.plateID), str(row), str(col) ] ) + ".jpg"
+            imName = "_".join([ str(plateID), str(row), str(col) ] ) + ".jpg"
             # Images live in a subfolder
-            imName = os.path.join(self.thumbSubDir, imName)
+            imName = os.path.join(thumbDir, imName)
             scoreLine.append( score )
             imgLine.append( img(imName, 300, 300) )
             n += 1
@@ -676,13 +695,15 @@ class GridSet:
         t.rows.append( TableRow( imgLine ) )
         t.rows.append( TableRow( scoreLine) )
         # Initialize the connection for the report
-        reportOut = open( os.path.join(self.directory, self.plateID + ".html"), "w")
+        reportOut = open( reportName, "w")
         # write the html
         reportOut.write( str(t) )
         reportOut.close()
 
     def close(self):
         self.openImage.close()
+        self.writeReport(self.reportFile, self.thumbDir)
+        self.writeReport(self.reportFile2, self.thumbDir, doInfo=True)
         for grid in self.grids.values():
             grid.close()
 
@@ -763,60 +784,68 @@ class Closing(WindowAdapter):
 #####                       Main code                                 #####
 ###########################################################################
 
+# Set up the fields for the SWING interface
+minField = JFormattedTextField( 0 )
+minField.addActionListener( ChangedMin(minField) )
 
-#chooser = JFileChooser()
-#chooser.setMultiSelectionEnabled(True)
-#chooser.showOpenDialog(JPanel())
-#chooser.setCurrentDirectory( File(os.path.expanduser("~")))
-#fp = chooser.getSelectedFiles()
+maxField = JFormattedTextField( 255 )
+maxField.addActionListener( ChangedMax(maxField) )
 
-class Empty:
-    pass
+scoreField = JTextField( "" )
+scoreField.addActionListener( NextImage(scoreField) )
+scoreField.addActionListener( WriteScore(scoreField) )
 
-chooser = Empty()
-chooser.APPROVE_OPTION = 1
-
-fp = ["/Users/cm/git/fiji-ccm-scoring/example2_plate1",
-      "/Users/cm/git/fiji-ccm-scoring/example2_plate2"]
-
-if chooser.APPROVE_OPTION != 0:
-    # Initialize the grid readers
-    plateGrid = GridSet(fp,
-                         "/Users/cm/git/fiji-ccm-scoring/cropped_files",
-                         "/Users/cm/git/fiji-ccm-scoring/testScores.csv")
-    plateGrid.openNext()
-
-    # Set up the fields for the SWING interface
-    minField = JFormattedTextField( 0 )
-    minField.addActionListener( ChangedMin(minField) )
-
-    maxField = JFormattedTextField( 255 )
-    maxField.addActionListener( ChangedMax(maxField) )
-
-    scoreField = JTextField( "" )
-    scoreField.addActionListener( NextImage(scoreField) )
-    scoreField.addActionListener( WriteScore(scoreField) )
-
-    button = JButton("Previous image")
-    button.addActionListener( PreviousImage(scoreField) )
+button = JButton("Previous image")
+button.addActionListener( PreviousImage(scoreField) )
 
     # Pack all the fields into a JPanel
-    all = JPanel()
-    layout = GridLayout(4, 1)
-    all.setLayout(layout)
-    all.add( JLabel("  ") )
-    all.add( button )
-    all.add( JLabel("Min") )
-    all.add( minField )
-    all.add( JLabel("Max") )
-    all.add(maxField )
-    all.add( JLabel("Score :") )
-    all.add(scoreField)
-    frame = JFrame("CCM scoring")
-    frame.getContentPane().add(JScrollPane(all))
-    frame.pack()
-    frame.addWindowListener( Closing() )
-    scoreField.requestFocusInWindow()
-    frame.setVisible(True)
+all = JPanel()
+layout = GridLayout(4, 1)
+all.setLayout(layout)
+all.add( JLabel("  ") )
+all.add( button )
+all.add( JLabel("Min") )
+all.add( minField )
+all.add( JLabel("Max") )
+all.add(maxField )
+all.add( JLabel("Score :") )
+all.add(scoreField)
+frame = JFrame("CCM scoring")
+frame.getContentPane().add(JScrollPane(all))
+frame.pack()
+frame.addWindowListener( Closing() )
+scoreField.requestFocusInWindow()
+
+# Get the grid files
+chooser = JFileChooser()
+chooser.setDialogTitle("Choose plate grids")
+chooser.setMultiSelectionEnabled(True)
+chooser.setCurrentDirectory( File(os.path.expanduser("~")))
+chooser.showOpenDialog(JPanel())
+
+# This is a hack to get a file path from the
+# sun.awt.shell.DefaultShellFolder object returned by the chooser
+fp = [str(i) for i in chooser.getSelectedFiles()]
+
+if len(fp) != 0:
+    gd = GenericDialog("Name your output file")
+    gd.addStringField("Score file name", "scores.csv")
+    gd.showDialog()
+    if not gd.wasCanceled():
+        scoreFile = gd.getNextString()
+        scoreFile = os.path.join( os.path.split(fp[0])[0], scoreFile)
+        cropDir = os.path.splitext( scoreFile)[0] + "_cropped"
+        # Initialize the grid readers
+        plateGrid = GridSet(fp,scoreFile,cropDir)
+        plateGrid.openNext()
+        # Show the GUI
+        frame.setVisible(True)
+    else:
+        pass
+else:
+    pass
+
+
+
 
 
