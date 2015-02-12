@@ -17,7 +17,7 @@ This plugin implements a simple interface that: 1) crops sub-images from a large
 
 ** Name your files appropriately
 - Each image you're going to score should be named something memorable with no underscores and no special characters (e.g. spaces, dollar signs, etc.)
-- Each image should be a =tif= file and should end with the extension =.tif=
+- Each image should be a =tif= file and should end with the extension =.tif= (not =.tiff=)
 
 ** Create a grid
 - Open the image to be scored in Fiji
@@ -51,8 +51,8 @@ This plugin implements a simple interface that: 1) crops sub-images from a large
 - When you close the window, the script will generate an HTML file that displays the thumbnails and the scores that you gave to them. The report is called something like "example-scores.html" A second file is generated called something like "example-scores-with-plate-positions.html". This has the names of the plates and the positions so that you can correct your scores.
 
 ** TODOs
-- Crop the source image to save memory
-- Auto-load grids for previous data
+- Flexibility for tif naming
+- Share source images to save memory
 
 ** Bugs
 - Currently, when you change the min and the max, the image updates properly, but the current thumbnail is not saved with the new min/max 
